@@ -94,3 +94,11 @@ const ProjectMember=require("./projectMember.model");
 
     
 //------- END ------------------------------
+
+module.exports={
+    User,
+    Task,
+    Project,
+    ProjectMember,
+    TaskMember
+}
