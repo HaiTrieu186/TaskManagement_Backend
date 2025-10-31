@@ -1,14 +1,19 @@
 const express = require('express')
-require("dotenv").config()
-const route=require('./routes/index.route');
 const app = express()
-
+require("dotenv").config()
 const port = process.env.PORT
+const bodyParser = require('body-parser')
+
+app.use(bodyParser.urlencoded())
+app.use(bodyParser.json())
+
+
 const sequelize= require("./config/database");
+const route=require('./routes/index.route');
+
 
 // gọi sequelize để kết nối tới database
 sequelize;
-
 route(app);
 
 

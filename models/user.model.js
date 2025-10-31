@@ -28,6 +28,7 @@ const User= sequelize.define("User",{
   },
   Role: {
     type: DataTypes.ENUM(['user','admin']),
+    defaultValue:'user',
     allowNull:false,
   },
   avatar: {
@@ -36,6 +37,7 @@ const User= sequelize.define("User",{
 },  
 deleted:{
   type: DataTypes.BOOLEAN,
+  defaultValue:false,
   allowNull:false
 }
 
