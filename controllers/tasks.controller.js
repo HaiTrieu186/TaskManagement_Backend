@@ -7,6 +7,7 @@ const priority_values=['low', 'medium', 'high'];
 module.exports.index = async (req, res) =>{
    try {
         const find={
+            Creator_id: req.user.id,
             deleted:false,
         }
         const sort=[];
@@ -46,9 +47,8 @@ module.exports.index = async (req, res) =>{
         const tasks=await model.Task.findAll({
             where :find,
             order:[...sort],
-            raw:true
         })
-    return res.json(tasks)
+    return res.json(tasks);
 
    } catch (error) {
         return res.status(500).json({
@@ -65,14 +65,18 @@ module.exports.get = async (req, res) =>{
         const id= req.params.id
         const task=await model.Task.findOne({
             where :{id: id},
-            raw:true
         })
         if (!task){
             return res.status(404).json({
                 message:"Task không tồn tại"
             })
         }
-        return res.status(200).json(task);
+
+        if (task.Creator_id== req.user.id)
+            return res.status(401).json({message:"Bạn không có quyền lấy task này"})
+
+
+        return res.status(200).json(task.toJSON());
 
     } catch (error) {
         return res.status(500).json({
@@ -88,17 +92,27 @@ module.exports.create= async (req,res) =>{
    try {
         const data= req.body;
 
-        if (priority_values.includes(data.priority))
+        if (!priority_values.includes(data.priority))
             return res.status(400).json({
                 message:"Độ ưu tiên chưa chính xác"
             })
 
-        if (status_values.includes(data.status))
+        if (!status_values.includes(data.status))
             return res.status(400).json({
                 message:"Trạng thái chưa chính xác"
             })
         
+        const newTask= await model.Task({
+            ...data,
+            Creator_id:req.user.id,
+            deleted:false
+        })    
         
+        return res.status(201).json({
+            message:"Đã tạo công việc thành công",
+            task:newTask
+        })
+
 
    } catch (error) {
         res.status(500).json({

@@ -20,10 +20,10 @@ module.exports.register= async (req,res)=>{
         const hashedPassword = await bcrypt.hash(Password, saltRounds);
 
         const newUser= await User.create({
-        FirstName: FirstName,
-        LastName: LastName,
-        Email: Email,
-        Password: hashedPassword,
+            FirstName: FirstName,
+            LastName: LastName,
+            Email: Email,
+            Password: hashedPassword,
         })
 
         console.log(newUser);
@@ -62,7 +62,10 @@ try {
         })
     
 
-    const token = jwt.sign({ Email: user.Email},process.env.JWT_SECRET_KEY,{ expiresIn: '1h' })
+    const token = jwt.sign({ 
+        id:user.id ,
+        Email: user.Email
+    },process.env.JWT_SECRET_KEY,{ expiresIn: '1h' })
 
     return res.status(200).json({
         message:"Đăng nhập thành công",
