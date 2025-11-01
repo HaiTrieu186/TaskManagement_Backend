@@ -13,13 +13,13 @@ module.exports.index = async (req, res) =>{
         const sort=[];
 
         // Lọc theo trạng thái
-        if (req.query.status && status_values.includes(req.query.status))
-            find.Status=req.query.status;
+        if (req.query.status && status_values.includes(req.query.Status))
+            find.Status=req.query.Status;
 
         // Lọc theo độ ưu tiên
-        if (req.query.priority && priority_values.includes(req.query.priority))
-            find.Priority=req.query.priority;
-
+        if (req.query.priority && priority_values.includes(req.query.Priority))
+            find.Priority=req.query.Priority;
+        
         // Lọc theo tên project_id
         if (req.query.project_id)
             find.project_id=req.query.project_id
@@ -92,12 +92,12 @@ module.exports.create= async (req,res) =>{
    try {
         const data= req.body;
 
-        if (!priority_values.includes(data.priority))
+        if (!priority_values.includes(data.Priority))
             return res.status(400).json({
                 message:"Độ ưu tiên chưa chính xác"
             })
 
-        if (!status_values.includes(data.status))
+        if (!status_values.includes(data.Status))
             return res.status(400).json({
                 message:"Trạng thái chưa chính xác"
             })
