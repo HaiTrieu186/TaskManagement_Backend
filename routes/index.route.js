@@ -1,7 +1,7 @@
 const taskRoute= require("./tasks.route")
-const registerRoute= require("./register.route")
+const authRoute= require("./auth.route")
 
 module.exports =(app) => {
-    app.use("/register/",registerRoute);
+    app.use("/auth",authRoute);
     app.use("/tasks",taskRoute);
 }

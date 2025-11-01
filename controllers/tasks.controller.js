@@ -19,6 +19,10 @@ module.exports.index = async (req, res) =>{
         if (req.query.priority && priority_values.includes(req.query.priority))
             find.Priority=req.query.priority;
 
+        // Lọc theo tên project_id
+        if (req.query.project_id)
+            find.project_id=req.query.project_id
+        
         // Sắp xếp (nếu có)
         if (req.query.sortKey && req.query.sortValue){
             const sortKey=req.query.sortKey;
@@ -38,12 +42,14 @@ module.exports.index = async (req, res) =>{
             }       
         }
             
+
         const tasks=await model.Task.findAll({
             where :find,
             order:[...sort],
             raw:true
         })
     return res.json(tasks)
+
    } catch (error) {
         return res.status(500).json({
             message:"Đã xảy ra lỗi",
@@ -76,3 +82,30 @@ module.exports.get = async (req, res) =>{
         
     }
 }
+
+// [POST] /tasks
+module.exports.create= async (req,res) =>{
+   try {
+        const data= req.body;
+
+        if (priority_values.includes(data.priority))
+            return res.status(400).json({
+                message:"Độ ưu tiên chưa chính xác"
+            })
+
+        if (status_values.includes(data.status))
+            return res.status(400).json({
+                message:"Trạng thái chưa chính xác"
+            })
+        
+        
+
+   } catch (error) {
+        res.status(500).json({
+            message:"Đã có lỗi khi tạo task",
+            error:error.message
+        })
+   }
+        
+}
+

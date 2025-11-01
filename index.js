@@ -1,9 +1,16 @@
+require("dotenv").config()
+
 const express = require('express')
 const app = express()
-require("dotenv").config()
+var cors = require('cors')
 const port = process.env.PORT
 const bodyParser = require('body-parser')
 
+
+const corsOptions = {
+    origin: 'http://localhost:3000' 
+}
+app.use(cors(corsOptions));
 app.use(bodyParser.urlencoded())
 app.use(bodyParser.json())
 
