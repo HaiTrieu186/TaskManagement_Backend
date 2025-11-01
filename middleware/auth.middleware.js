@@ -4,6 +4,7 @@ module.exports.verifyToken = (req,res, next )=> {
     
     try {
         const token = req.header("Authorization") && req.header("Authorization").replace("Bearer ","");
+
         if (!token)
             return res.status(401).json({
                 message:"Vui lòng đăng nhập để có token"
@@ -13,6 +14,8 @@ module.exports.verifyToken = (req,res, next )=> {
             const data= jwt.verify(token,process.env.JWT_SECRET_KEY);
             req.user=data;
        } catch (error) {
+            //console.log(" lỗi verify token:", error.message);
+            //console.log(" Full error:", error); // Xem chi tiết
             return res.status(401).json({
                 message:"Token không hợp lệ",
                 error:error.message

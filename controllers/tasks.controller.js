@@ -72,7 +72,7 @@ module.exports.get = async (req, res) =>{
             })
         }
 
-        if (task.Creator_id== req.user.id)
+        if (task.Creator_id !== req.user.id)
             return res.status(401).json({message:"Bạn không có quyền lấy task này"})
 
 
@@ -102,7 +102,7 @@ module.exports.create= async (req,res) =>{
                 message:"Trạng thái chưa chính xác"
             })
         
-        const newTask= await model.Task({
+        const newTask= await model.Task.create({
             ...data,
             Creator_id:req.user.id,
             deleted:false
