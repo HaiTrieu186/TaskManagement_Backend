@@ -11,6 +11,7 @@ module.exports.register= async (req,res)=>{
 
         if (currentUser){
             return res.status(401).json({
+                success:false,
                 message:"Đã tồn tại tài khoản"
             })
         }
@@ -27,10 +28,20 @@ module.exports.register= async (req,res)=>{
         })
 
         console.log(newUser);
-        return res.status(201).json(newUser.toJSON());
+        return res.status(201).json({
+            success:true,
+            message:"Đăng ký thành công",
+            user: {
+                id: newUser.id,
+                FirstName: newUser.FirstName,
+                LastName: newUser.LastName,
+                Email: newUser.Email
+            }
+        });
 
     } catch (err) {
         return res.status(500).json({
+            success:false,
             message:"Tạo tài khoản thất bại",
             error:err.message
         })
@@ -50,6 +61,7 @@ try {
     // Kiểm tra email trước
     if (!user) 
         return res.status(401).json({
+            success:false,
             message:"Tài khoản không tồn tại !"
         })
     
@@ -58,6 +70,7 @@ try {
     const isValidPassword = await bcrypt.compare(Password, user.Password);
     if (!isValidPassword)
         return res.status(401).json({
+            success:false,
             message:"Mật khẩu không chính xác !"
         })
     
@@ -68,12 +81,14 @@ try {
     },process.env.JWT_SECRET_KEY,{ expiresIn: '1h' })
 
     return res.status(200).json({
+        success:true,
         message:"Đăng nhập thành công",
         token: token
     })
 
 } catch (err) {
     return res.status(500).json({
+        success:false,
         message:"Đã có lỗi trong quá trình đăng nhập",
         error:err.message
     })
