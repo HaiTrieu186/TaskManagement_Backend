@@ -11,7 +11,11 @@ const findTaskAndCheck = async (taskId, currentUserId) => {
         include: [{
             model: model.User,
             as: "TaskMembers",
-            attributes: ['id']
+            attributes:["id","FirstName","LastName"],
+            through:{
+                model:model.TaskMember,
+                attributes:["joined_at"]
+            }
         }]
     });
 

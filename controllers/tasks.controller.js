@@ -168,6 +168,37 @@ module.exports.getTask = async (req, res) =>{
     }
 }
 
+// [GET] /tasks/join
+module.exports.getJoinedTask = async (req,res) =>{
+    try {
+        const userID= req.user.id;
+
+        const tasks= await model.Task.findAll({
+            include:[
+               {
+                 model:model.User,
+                 as: "TaskMembers",
+                 where: { id: userID},
+                 attributes:[]
+               }
+            ]
+        })
+
+        return res.status(200).json({
+            success:true,
+            message:"Lấy danh sách công việc tham gia thành công",
+            joinedTasks:tasks
+        })
+
+    } catch (error) {
+        return res.status(500).json({
+            success:false,
+            message:"Đã có lỗi khi lấy nhiệm vụ tham gia",
+            error:error.message
+        })
+    }
+}
+
 // [POST] /tasks/create
 module.exports.create= async (req,res) =>{
    try {
