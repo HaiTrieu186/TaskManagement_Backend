@@ -4,14 +4,18 @@ const paginationHelper=require("../helpers/pagination.helper")
 const { status_values, priority_values, sort_values, findTaskAndCheck} = require("../helpers/find_checkTask.helper");
 
 
+
 // [GET] /tasks
 module.exports.getTasks = async (req, res) =>{
    try {
+    
         const find={
-            Creator_id: req.user.id,
             deleted:false,
         }
         const sort=[];
+
+        if (req.user.Role !=="admin")
+            find.Creator_id=req.user.id
 
         // Lọc theo trạng thái
         if (req.query.Status && status_values.includes(req.query.Status))
@@ -68,10 +72,10 @@ module.exports.getTasks = async (req, res) =>{
                 {
                     model:model.User,
                     as:"TaskMembers",
-                    attributes:["id","FirstName","LastName"],
+                    attributes:[],
                     through:{
                         model:model.TaskMember,
-                        attributes:["joined_at"]
+                        attributes:[]
                     }
                 }
             ],
@@ -81,7 +85,7 @@ module.exports.getTasks = async (req, res) =>{
         const paginationObj= paginationHelper(req.query);
         const totalPage= Math.ceil(totalTask/paginationObj.limit);
 
-         const tasks=await model.Task.findAll({
+        const tasks=await model.Task.findAll({
             where :find,
             include: [
                 {
@@ -96,14 +100,20 @@ module.exports.getTasks = async (req, res) =>{
             ],
             order:[...sort],
             limit:paginationObj.limit,
-            offset:paginationObj.offset
+            offset:paginationObj.offset,
+            distinct: true
         })
 
     return res.status(200).json({
         success:true,
         message:"Lấy danh sách công việc thành công",
         tasks:tasks,
-        totalPage:totalPage
+        pagination:{
+            "totalPage": totalPage,
+            "totalTask": totalTask,
+            "currentPage": paginationObj.currentPage,
+            "limit": paginationObj.limit
+        }
     });
 
    } catch (error) {
@@ -116,9 +126,146 @@ module.exports.getTasks = async (req, res) =>{
    }
 }
 
+// [GET] /tasks/deadline_soon 
+module.exports.deadlineSoon= async (req,res) =>{
+    try {
+        const userID= req.user.id; 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);  
+        const threeDaysLater = new Date();
+        threeDaysLater.setDate(today.getDate() + 3);
+        threeDaysLater.setHours(23, 59, 59, 999); 
+        
+        const includeObj={
+                model:model.User,
+                as:"TaskMembers",
+                attributes:[]
+        }
+
+        if (req.user.Role !=="admin")
+                includeObj.where={id:userID}
+
+
+        const deadline_tasks = await model.Task.findAll({
+            where:{
+                deleted:false,
+                Status:{
+                    [Op.notIn]: ["finish","notFinish"]
+                },
+                End_date:{
+                    [Op.between]: [today,threeDaysLater]
+                 }
+            },
+            order:[["End_date","ASC"]],
+            include:[includeObj]
+        })
+
+        if (!deadline_tasks || deadline_tasks.length==0)
+            return res.status(200).json({
+                success:true,
+                message:"Không có danh sách"
+            })
+
+        return res.status(200).json({
+                success:true,
+                message:"Lấy thành công danh sách sắp hết hạn",
+                data: deadline_tasks
+            }) 
+
+    } catch (error) {
+        return res.status(500).json({
+            success:false,
+            message:"Đã có lỗi khi lấy danh sách sắp hết hạn",
+            error:error.message
+        })
+    }
+}
+
+// [GET] /tasks/overdue
+module.exports.overdue= async (req,res) =>{
+    try {
+        const userID= req.user.id; 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);  
+        const includeObj={
+                model:model.User,
+                as:"TaskMembers",
+                attributes:[]
+        }
+
+        if (req.user.Role!=="admin")
+            includeObj.where={id: userID}
+        
+        const overdue_tasks = await model.Task.findAll({
+            where:{
+                deleted:false,
+                Status:{
+                    [Op.notIn]: ["finish","notFinish"]
+                },
+                End_date:{
+                    [Op.lt]: today
+                 }
+            },
+            order:[["End_date","DESC"]],
+            include:[includeObj]
+        })
+
+        if (!overdue_tasks || overdue_tasks.length==0)
+            return res.status(200).json({
+                success:true,
+                message:"Không có danh sách"
+            })
+
+        return res.status(200).json({
+                success:true,
+                message:"Lấy thành công danh sách quá hạn",
+                data: overdue_tasks
+            }) 
+
+    } catch (error) {
+        return res.status(500).json({
+            success:false,
+            message:"Đã có lỗi khi lấy danh sách quá hạn",
+            error:error.message
+        })
+    }
+}
+
+// [GET] /tasks/join
+module.exports.getJoinedTask = async (req,res) =>{
+    try {
+        const userID= req.user.id;
+        const includeObj={
+                model:model.User,
+                as:"TaskMembers",
+                where:{id: userID},
+                attributes:[]
+        }
+
+        const tasks= await model.Task.findAll({
+            where:{deleted:false},
+            include:[includeObj]
+        })
+
+        return res.status(200).json({
+            success:true,
+            message:"Lấy danh sách công việc tham gia thành công",
+            joinedTasks:tasks
+        })
+
+    } catch (error) {
+        return res.status(500).json({
+            success:false,
+            message:"Đã có lỗi khi lấy nhiệm vụ tham gia",
+            error:error.message
+        })
+    }
+}
+
 // [GET] /tasks/:id
 module.exports.getTask = async (req, res) =>{
     try {
+
         const id= req.params.id
         const task=await model.Task.findOne({
             where :{id: id, deleted:false},
@@ -142,15 +289,16 @@ module.exports.getTask = async (req, res) =>{
             })
         }
 
-        const isCreator = task.Creator_id === req.user.id;
-        const isMember  = task.TaskMembers.some(member => member.id === req.user.id)
+        if (req.user.Role==="user"){
+            const isCreator = task.Creator_id === req.user.id;
+            const isMember  = task.TaskMembers.some(member => member.id === req.user.id)
 
-        if (!isCreator && !isMember )
-            return res.status(401).json({
-                success:false,
-                message:"Bạn không có quyền lấy task này"
-            })
-
+            if (!isCreator && !isMember )
+                return res.status(401).json({
+                    success:false,
+                    message:"Bạn không có quyền lấy task này"
+                })
+        }
 
         return res.status(200).json({
             success:true,
@@ -168,65 +316,10 @@ module.exports.getTask = async (req, res) =>{
     }
 }
 
-// [GET] /tasks/join
-module.exports.getJoinedTask = async (req,res) =>{
-    try {
-        const userID= req.user.id;
-
-        const tasks= await model.Task.findAll({
-            include:[
-               {
-                 model:model.User,
-                 as: "TaskMembers",
-                 where: { id: userID},
-                 attributes:[]
-               }
-            ]
-        })
-
-        return res.status(200).json({
-            success:true,
-            message:"Lấy danh sách công việc tham gia thành công",
-            joinedTasks:tasks
-        })
-
-    } catch (error) {
-        return res.status(500).json({
-            success:false,
-            message:"Đã có lỗi khi lấy nhiệm vụ tham gia",
-            error:error.message
-        })
-    }
-}
-
 // [POST] /tasks/create
 module.exports.create= async (req,res) =>{
    try {
         const data= req.body;
-
-        if (!priority_values.includes(data.Priority))
-            return res.status(400).json({
-                success:false,
-                message:"Độ ưu tiên chưa chính xác"
-            })
-
-        if (!status_values.includes(data.Status))
-            return res.status(400).json({
-                success:false,
-                message:"Trạng thái chưa chính xác"
-            })
-        
-         if (data.Start_date && data.End_date) {
-            const startDate = new Date(data.Start_date);
-            const endDate = new Date(data.End_date);
-            
-            if (startDate > endDate) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Ngày bắt đầu phải trước ngày kết thúc"
-                });
-            }
-        }
             
         const newTask= await model.Task.create({
             ...data,
@@ -264,32 +357,7 @@ module.exports.update = async (req,res) => {
         const taskId= req.params.id;
 
 
-        const task = await findTaskAndCheck(taskId,req.user.id);
-        
-        // Check Start_date < End_date
-        if (Start_date && End_date) {
-            const startDate = new Date(Start_date);
-            const endDate = new Date(End_date);
-            if (startDate > endDate) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Ngày bắt đầu phải trước ngày kết thúc"
-                });
-            }
-        }
-        // Check độ ưu tiên
-         if (Priority && !priority_values.includes(Priority))
-            return res.status(400).json({
-                success:false,
-                message:"Độ ưu tiên chưa chính xác"
-            })
-
-        // Check trạng thái    
-        if ( Status && !status_values.includes(Status))
-            return res.status(400).json({
-                success:false,
-                message:"Trạng thái chưa chính xác"
-            })
+        const task = await findTaskAndCheck(taskId,req.user.id,req.user.Role);
 
         if (TaskName !== undefined) task.TaskName = TaskName;
         if (Description !== undefined) task.Description = Description;
@@ -322,15 +390,7 @@ module.exports.changeStatus= async (req ,res ) =>{
         const {Status} = req.body;
         const taskId= req.params.id;
 
-        // Check xem status có hợp lệ
-        if (!status_values.includes(Status))
-            return res.status(400).json({
-                success:false,
-                message:"Trạng thái không hợp lệ !"
-            })
-
-
-        const task = await findTaskAndCheck(taskId,req.user.id);    
+        const task = await findTaskAndCheck(taskId,req.user.id, req.user.Role);    
         
         task.Status=Status;
 
@@ -372,13 +432,15 @@ module.exports.delete= async (req, res ) =>{
             })
 
         
-        const isCreator = (task.Creator_id === req.user.id);
-        
-        if (!isCreator)    
-            return res.status(403).json({
-                success:false,
-                message:"Bạn không có quyền xóa task này"
-            })
+       if (req.user.Role==="user"){
+            const isCreator = (task.Creator_id === req.user.id);
+            
+            if (!isCreator)    
+                return res.status(403).json({
+                    success:false,
+                    message:"Bạn không có quyền xóa task này"
+                })
+       } 
 
         task.deleted=true;
         task.deleted_at= new Date();
@@ -397,3 +459,32 @@ module.exports.delete= async (req, res ) =>{
     }
 
 }
+
+// [PATCH] /task/:id/addMembers
+module.exports.addMembersToTask= async (req, res) =>{
+    try {
+        const taskID= req.params.id;
+        const listIDUser= req.body.data;
+
+        const task = await findTaskAndCheck(taskID, req.user.id,req.user.Role);
+
+        await task.addTaskMembers(listIDUser,{
+            through:{
+                joined_at: new Date()
+            },
+        })
+
+        return res.status(200).json({
+            success:true,
+            message:"Đã thêm thành viên thành công"
+        })
+        
+        
+    } catch (error) {
+        return  res.status(500).json({
+            success:false,
+            message:"Đã có lỗi xảy ra khi thêm thành viên vào task"
+        })
+    }
+}
+

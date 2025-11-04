@@ -77,7 +77,8 @@ try {
 
     const token = jwt.sign({ 
         id:user.id ,
-        Email: user.Email
+        Email: user.Email,
+        Role: user.Role
     },process.env.JWT_SECRET_KEY,{ expiresIn: '1h' })
 
     return res.status(200).json({
