@@ -15,7 +15,7 @@ module.exports.getTasks = async (req, res) =>{
         const sort=[];
 
         if (req.user.Role !=="admin")
-            find.Creator_id=req.user.id
+            find["$TaskMembers.id$"]=req.user.id
 
         // Lọc theo trạng thái
         if (req.query.Status && status_values.includes(req.query.Status))
@@ -157,7 +157,8 @@ module.exports.deadlineSoon= async (req,res) =>{
                  }
             },
             order:[["End_date","ASC"]],
-            include:[includeObj]
+            include:[includeObj],
+            distinct: true
         })
 
         if (!deadline_tasks || deadline_tasks.length==0)
@@ -207,7 +208,8 @@ module.exports.overdue= async (req,res) =>{
                  }
             },
             order:[["End_date","DESC"]],
-            include:[includeObj]
+            include:[includeObj],
+            distinct: true
         })
 
         if (!overdue_tasks || overdue_tasks.length==0)
@@ -226,37 +228,6 @@ module.exports.overdue= async (req,res) =>{
         return res.status(500).json({
             success:false,
             message:"Đã có lỗi khi lấy danh sách quá hạn",
-            error:error.message
-        })
-    }
-}
-
-// [GET] /tasks/join
-module.exports.getJoinedTask = async (req,res) =>{
-    try {
-        const userID= req.user.id;
-        const includeObj={
-                model:model.User,
-                as:"TaskMembers",
-                where:{id: userID},
-                attributes:[]
-        }
-
-        const tasks= await model.Task.findAll({
-            where:{deleted:false},
-            include:[includeObj]
-        })
-
-        return res.status(200).json({
-            success:true,
-            message:"Lấy danh sách công việc tham gia thành công",
-            joinedTasks:tasks
-        })
-
-    } catch (error) {
-        return res.status(500).json({
-            success:false,
-            message:"Đã có lỗi khi lấy nhiệm vụ tham gia",
             error:error.message
         })
     }
@@ -460,11 +431,18 @@ module.exports.delete= async (req, res ) =>{
 
 }
 
-// [PATCH] /task/:id/addMembers
+// [PATCH] /task/:id/add-members
 module.exports.addMembersToTask= async (req, res) =>{
     try {
         const taskID= req.params.id;
         const listIDUser= req.body.data;
+
+        if (!listIDUser || !Array.isArray(listIDUser) || listIDUser.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Vui lòng cung cấp một mảng memberIds"
+            });
+        }
 
         const task = await findTaskAndCheck(taskID, req.user.id,req.user.Role);
 
@@ -487,4 +465,36 @@ module.exports.addMembersToTask= async (req, res) =>{
         })
     }
 }
+
+// [PATCH] /task/:id/remove-members
+module.exports.removeMembersFromTask= async (req, res) =>{
+    try {
+        const taskID= req.params.id;
+        const listIDUser= req.body.data;
+
+        const task = await findTaskAndCheck(taskID, req.user.id,req.user.Role);
+
+        if (!listIDUser || !Array.isArray(listIDUser) || listIDUser.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Vui lòng cung cấp một mảng memberIds (ID:[a,b,...])"
+            });
+        }
+
+        await task.removeTaskMembers(listIDUser)
+
+        return res.status(200).json({
+            success:true,
+            message:"Đã xóa thành viên thành công"
+        })
+        
+        
+    } catch (error) {
+        return  res.status(500).json({
+            success:false,
+            message:"Đã có lỗi xảy ra khi xóa thành viên vào task"
+        })
+    }
+}
+
 
