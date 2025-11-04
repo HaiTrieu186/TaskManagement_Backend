@@ -135,27 +135,32 @@ module.exports.deadlineSoon= async (req,res) =>{
         const threeDaysLater = new Date();
         threeDaysLater.setDate(today.getDate() + 3);
         threeDaysLater.setHours(23, 59, 59, 999); 
-        
-        const includeObj={
-                model:model.User,
-                as:"TaskMembers",
-                attributes:[]
-        }
-
-        if (req.user.Role !=="admin")
-                includeObj.where={id:userID}
-
-
-        const deadline_tasks = await model.Task.findAll({
-            where:{
+        const find={
                 deleted:false,
                 Status:{
                     [Op.notIn]: ["finish","notFinish"]
                 },
                 End_date:{
                     [Op.between]: [today,threeDaysLater]
-                 }
-            },
+                }
+        }
+
+        const includeObj={
+                model:model.User,
+                as:"TaskMembers",
+                attributes:["id","FirstName","LastName"],
+                through:{
+                    model:model.TaskMember,
+                    attributes:["joined_at"]
+                }
+        }
+
+        if (req.user.Role !=="admin")
+            find["$TaskMembers.id$"]=req.user.id
+
+
+        const deadline_tasks = await model.Task.findAll({
+            where:find,
             order:[["End_date","ASC"]],
             include:[includeObj],
             distinct: true
@@ -188,25 +193,30 @@ module.exports.overdue= async (req,res) =>{
         const userID= req.user.id; 
         const today = new Date();
         today.setHours(0, 0, 0, 0);  
+        const find={
+            deleted:false,
+            Status:{
+                [Op.notIn]: ["finish","notFinish"]
+            },
+            End_date:{
+                [Op.lt]: today
+            }
+        }
         const includeObj={
                 model:model.User,
                 as:"TaskMembers",
-                attributes:[]
+                attributes:["id","FirstName","LastName"],
+                through:{
+                    model:model.TaskMember,
+                    attributes:["joined_at"]
+                }
         }
 
         if (req.user.Role!=="admin")
-            includeObj.where={id: userID}
+            find["$TaskMembers.id$"]=req.user.id
         
         const overdue_tasks = await model.Task.findAll({
-            where:{
-                deleted:false,
-                Status:{
-                    [Op.notIn]: ["finish","notFinish"]
-                },
-                End_date:{
-                    [Op.lt]: today
-                 }
-            },
+            where:find,
             order:[["End_date","DESC"]],
             include:[includeObj],
             distinct: true
