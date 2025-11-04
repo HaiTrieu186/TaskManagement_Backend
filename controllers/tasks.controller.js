@@ -14,8 +14,12 @@ module.exports.getTasks = async (req, res) =>{
         }
         const sort=[];
 
-        if (req.user.Role !=="admin")
-            find["$TaskMembers.id$"]=req.user.id
+        if (req.user.Role !== "admin") {
+            find["$TaskMembers.id$"] = req.user.id;
+            includeObj.required = true; 
+        } else {
+            includeObj.required = false;
+        }
 
         // Lọc theo trạng thái
         if (req.query.Status && status_values.includes(req.query.Status))
@@ -155,8 +159,12 @@ module.exports.deadlineSoon= async (req,res) =>{
                 }
         }
 
-        if (req.user.Role !=="admin")
-            find["$TaskMembers.id$"]=req.user.id
+        if (req.user.Role !== "admin") {
+            find["$TaskMembers.id$"] = req.user.id;
+            includeObj.required = true; 
+        } else {
+            includeObj.required = false;
+        }
 
 
         const deadline_tasks = await model.Task.findAll({
@@ -212,8 +220,12 @@ module.exports.overdue= async (req,res) =>{
                 }
         }
 
-        if (req.user.Role!=="admin")
-            find["$TaskMembers.id$"]=req.user.id
+        if (req.user.Role !== "admin") {
+            find["$TaskMembers.id$"] = req.user.id;
+            includeObj.required = true; 
+        } else {
+            includeObj.required = false;
+        }
         
         const overdue_tasks = await model.Task.findAll({
             where:find,
