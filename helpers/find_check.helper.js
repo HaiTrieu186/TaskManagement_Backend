@@ -1,6 +1,6 @@
 const model = require("../models/index.model");
-const status_values = ['initial', 'doing', 'finish', 'pending', 'notFinish'];
-const priority_values = ['low', 'medium', 'high'];
+const task_status_values = ['initial', 'doing', 'finish', 'pending', 'notFinish'];
+const task_priority_values = ['low', 'medium', 'high'];
 const sort_values = ["ASC", "DESC"];
 
 const findTaskAndCheck = async (taskId, currentUserId, Role) => {
@@ -44,8 +44,8 @@ const findTaskAndCheck = async (taskId, currentUserId, Role) => {
 }
 
 module.exports = {
-    status_values,
-    priority_values,
+    task_status_values,
+    task_priority_values,
     sort_values,
     findTaskAndCheck
 }

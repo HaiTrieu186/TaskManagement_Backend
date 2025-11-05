@@ -1,7 +1,7 @@
 const model= require("../models/index.model");
 const { Op} = require("sequelize");
 const paginationHelper=require("../helpers/pagination.helper")
-const { status_values, priority_values, sort_values, findTaskAndCheck} = require("../helpers/find_checkTask.helper");
+const { task_status_values, task_priority_values, sort_values, findTaskAndCheck} = require("../helpers/find_check.helper");
 const ExcelJS= require("exceljs")
 
 
@@ -27,11 +27,11 @@ module.exports.getTasks = async (req, res) =>{
         }
 
         // Lọc theo trạng thái
-        if (req.query.Status && status_values.includes(req.query.Status))
+        if (req.query.Status && task_status_values.includes(req.query.Status))
             find.Status=req.query.Status;
 
         // Lọc theo độ ưu tiên
-        if (req.query.Priority && priority_values.includes(req.query.Priority))
+        if (req.query.Priority && task_priority_values.includes(req.query.Priority))
             find.Priority=req.query.Priority;
         
         // Lọc theo tên project_id
@@ -105,7 +105,7 @@ module.exports.getTasks = async (req, res) =>{
                 as:"TaskMembers",
                 attributes:["id","FirstName","LastName"],
                 through:{
-                    attributes:["joined_at"]
+                    attributes:[]
                 }
             },
             {
@@ -598,10 +598,10 @@ module.exports.export= async (req,res) =>{
         }
         
         // Các filter giống getTasks
-        if (req.query.Status && status_values.includes(req.query.Status))
+        if (req.query.Status && task_status_values.includes(req.query.Status))
             find.Status = req.query.Status;
 
-        if (req.query.Priority && priority_values.includes(req.query.Priority))
+        if (req.query.Priority && task_priority_values.includes(req.query.Priority))
             find.Priority = req.query.Priority;
 
         if (req.query.project_id)

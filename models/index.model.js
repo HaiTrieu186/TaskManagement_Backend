@@ -17,7 +17,7 @@ const ProjectMember=require("./projectMember.model");
         as:"TaskCreator"
     })
 
-    //----1 User tạo nhiều project, mỗi project chỉ được ạo bởi một user.
+    //----1 User tạo nhiều project, mỗi project chỉ được tạo bởi một user.
     User.hasMany(Project,{
         foreignKey:"Manager_id",
         as:"CreatedProjects"
