@@ -72,3 +72,16 @@ module.exports.validateLogin = (req, res, next) => {
 
     next();
 };
+
+module.exports.validateUserId = (req, res, next) => {
+    const { id } = req.params;
+    
+    if (!id || isNaN(id) || parseInt(id) < 1) {
+        return res.status(400).json({
+            success: false,
+            message: 'ID user không hợp lệ'
+        });
+    }
+
+    next();
+};

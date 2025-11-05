@@ -1,6 +1,7 @@
 const {User}=require("../models/index.model");
 const bcrypt= require("bcryptjs")
 const jwt= require("jsonwebtoken")
+const model = require("../models/index.model")
 
 module.exports.register= async (req,res)=>{
     try {
@@ -96,4 +97,35 @@ try {
     
 }
     
+}
+
+module.exports.me= async (req,res) =>{
+    try {
+        const id = req.user.id;
+
+        if (!id)
+            return res.status(404).json({
+                success:false,
+                message:"Không tìm thấy user hợp lệ"
+            })
+        
+        const User = await model.User.findOne({
+            where:{id: id},
+            attributes:["id","FirstName","LastName","Email","Role","avatar"]
+        })
+
+        return res.status(200).json({
+                success:true,
+                message:"Lấy thông tin user thành công",
+                data:User
+        })
+
+    } catch (error) {
+        return res.status(500).json({
+            success:false,
+            message:"Đã có lỗi khi lấy thông tin người dùng",
+            error:error.message
+        })
+    }
+
 }

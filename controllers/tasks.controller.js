@@ -2,7 +2,7 @@ const model= require("../models/index.model");
 const { Op} = require("sequelize");
 const paginationHelper=require("../helpers/pagination.helper")
 const { status_values, priority_values, sort_values, findTaskAndCheck} = require("../helpers/find_checkTask.helper");
-
+const ExcelJS= require("exceljs")
 
 
 // [GET] /tasks
@@ -13,9 +13,14 @@ module.exports.getTasks = async (req, res) =>{
             deleted:false,
         }
         const sort=[];
+        const includeObj={
+            model:model.User,
+            as:"TaskMembers",
+            attributes:[],
+        }
 
         if (req.user.Role !== "admin") {
-            find["$TaskMembers.id$"] = req.user.id;
+            includeObj.where={id: req.user.id},
             includeObj.required = true; 
         } else {
             includeObj.required = false;
@@ -49,7 +54,22 @@ module.exports.getTasks = async (req, res) =>{
                 [Op.like]:`%${req.query.search}%`
             }
         }
-        
+
+        const joinedTask= await model.Task.findAll({
+            where:find,
+            include:[includeObj],
+            attributes:["id"]
+        })
+
+        if (!joinedTask|| joinedTask.length===0)
+            return res.status(200).json({
+                success:true,
+                message:"Không có công việc nào",
+        })
+
+        const idTasksList= joinedTask.map(task => task.id);
+        console.log(idTasksList.length);
+
         // Sắp xếp (nếu có)
         if (req.query.sortKey && req.query.sortValue){
             const sortKey=req.query.sortKey;
@@ -67,41 +87,32 @@ module.exports.getTasks = async (req, res) =>{
                 if (sort_values.includes(sortValue))
                     sort.push([sortKey,sortValue])
             }       
-        }
+        }    
 
         // Làm phân trang pagination
-        const totalTask= await model.Task.count({
-            where :find,
-            include: [
-                {
-                    model:model.User,
-                    as:"TaskMembers",
-                    attributes:[],
-                    through:{
-                        model:model.TaskMember,
-                        attributes:[]
-                    }
-                }
-            ],
-            distinct: true
-        })
-
+        const totalTask= idTasksList.length;
         const paginationObj= paginationHelper(req.query);
         const totalPage= Math.ceil(totalTask/paginationObj.limit);
 
         const tasks=await model.Task.findAll({
-            where :find,
-            include: [
-                {
-                    model:model.User,
-                    as:"TaskMembers",
-                    attributes:["id","FirstName","LastName"],
-                    through:{
-                        model:model.TaskMember,
-                        attributes:["joined_at"]
-                    }
+            where :{
+                id:{
+                    [Op.in]: idTasksList,
                 }
-            ],
+            },
+            include: [{
+                model:model.User,
+                as:"TaskMembers",
+                attributes:["id","FirstName","LastName"],
+                through:{
+                    attributes:["joined_at"]
+                }
+            },
+            {
+             model:model.Project,
+             as:"ParentProject",
+             attributes:["Name","Description"]
+            }],
             order:[...sort],
             limit:paginationObj.limit,
             offset:paginationObj.offset,
@@ -152,15 +163,11 @@ module.exports.deadlineSoon= async (req,res) =>{
         const includeObj={
                 model:model.User,
                 as:"TaskMembers",
-                attributes:["id","FirstName","LastName"],
-                through:{
-                    model:model.TaskMember,
-                    attributes:["joined_at"]
-                }
+                attributes:[],
         }
 
         if (req.user.Role !== "admin") {
-            find["$TaskMembers.id$"] = req.user.id;
+            includeObj.where={id: req.user.id},
             includeObj.required = true; 
         } else {
             includeObj.required = false;
@@ -213,15 +220,11 @@ module.exports.overdue= async (req,res) =>{
         const includeObj={
                 model:model.User,
                 as:"TaskMembers",
-                attributes:["id","FirstName","LastName"],
-                through:{
-                    model:model.TaskMember,
-                    attributes:["joined_at"]
-                }
+                attributes:[]
         }
 
         if (req.user.Role !== "admin") {
-            find["$TaskMembers.id$"] = req.user.id;
+            includeObj.where={id: req.user.id},
             includeObj.required = true; 
         } else {
             includeObj.required = false;
@@ -297,6 +300,59 @@ module.exports.getTask = async (req, res) =>{
             success:true,
             message:"Lấy công việc thành công",
             task:task.toJSON()
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success:false,
+            message:"Đã xảy ra lỗi khi lấy công việc",
+            error:error.message,
+        })
+        
+    }
+}
+
+// [GET] /tasks/:id/members
+module.exports.getTaskMembers = async (req, res) =>{
+    try {
+
+        const id= req.params.id
+        const task= await model.Task.findByPk(id);
+
+         if (!task){
+            return res.status(404).json({
+                success:false,
+                message:"Không tồn tại công việc"
+            })
+        }
+
+        const members = await task.getTaskMembers({
+            attributes: ["id", "FirstName", "LastName", "Email", "Role", "avatar"],
+            joinTableAttributes: ['joined_at']
+        });
+
+        if (!members || members.length===0){
+            return res.status(200).json({
+                success:false,
+                message:"Không có thành viên nào"
+            })
+        }
+
+        if (req.user.Role==="user"){
+            const isCreator = task.Creator_id === req.user.id;
+            const isMember  = members.some(member => member.id === req.user.id)
+
+            if (!isCreator && !isMember )
+                return res.status(401).json({
+                    success:false,
+                    message:"Bạn không có quyền lấy task này"
+                })
+        }
+
+        return res.status(200).json({
+            success:true,
+            message:"Lấy công việc thành công",
+            members:members
         });
 
     } catch (error) {
@@ -519,4 +575,219 @@ module.exports.removeMembersFromTask= async (req, res) =>{
     }
 }
 
+// [GET] /tasks/export
+module.exports.export= async (req,res) =>{
+    try {
+        const sort=[];
+        const find={
+            deleted:false
+        }
+
+        const includeObj={
+            model:model.User,
+            as:"TaskMembers",
+            attributes:[]
+        };
+
+        // Phân quyền
+        if (req.user.Role !== "admin") {
+            includeObj.where = { id: req.user.id };
+            includeObj.required = true;
+        } else {
+            includeObj.required = false;
+        }
+        
+        // Các filter giống getTasks
+        if (req.query.Status && status_values.includes(req.query.Status))
+            find.Status = req.query.Status;
+
+        if (req.query.Priority && priority_values.includes(req.query.Priority))
+            find.Priority = req.query.Priority;
+
+        if (req.query.project_id)
+            find.project_id = req.query.project_id;
+
+        if (req.query.deadline_from || req.query.deadline_to) {
+            find.End_date = {};
+            if (req.query.deadline_from)
+                find.End_date[Op.gte] = new Date(req.query.deadline_from);
+            if (req.query.deadline_to)
+                find.End_date[Op.lte] = new Date(req.query.deadline_to);
+        }
+
+        if (req.query.search) {
+            find.TaskName = {
+                [Op.like]: `%${req.query.search}%`
+            };
+        }
+
+         // Lấy danh sách các task mình tham gia hoặc tạo
+        const joinedTask= await model.Task.findAll({
+            where:find,
+            include:[includeObj],
+            attributes:["id"]
+        })
+
+        if (!joinedTask|| joinedTask.length===0)
+            return res.status(200).json({
+                success:true,
+                message:"Không có công việc nào",
+            })
+
+        const idTasksList= joinedTask.map(task => task.id);
+        console.log(idTasksList.length);
+        
+
+        // Sắp xếp
+        if (req.query.sortKey && req.query.sortValue) {
+            const sortKey = req.query.sortKey;
+            const sortValue = req.query.sortValue;
+
+            if (Array.isArray(sortKey) && Array.isArray(sortValue) && sortKey.length == sortValue.length) {
+                for (let i = 0; i < sortKey.length; i++)
+                    if (sort_values.includes(sortValue[i]))
+                        sort.push([sortKey[i], sortValue[i]]);
+            } else if (typeof sortKey === 'string' && typeof sortValue === 'string') {
+                if (sort_values.includes(sortValue))
+                    sort.push([sortKey, sortValue]);
+            }
+        }
+        
+        const finalList= await model.Task.findAll({
+            where:{
+                id:{
+                    [Op.in]:idTasksList
+                }
+            },
+            include:[
+                {
+                    model: model.User,
+                    as:"TaskMembers",
+                    attributes:["id","FirstName","LastName"],
+                    through:{
+                        attributes:["joined_at"]
+                    }
+                },
+                {
+                    model: model.User,
+                    as:"TaskCreator",
+                    attributes:["FirstName","LastName"]
+                },
+                {
+                    model: model.Project,
+                    as:"ParentProject",
+                    attributes:["Name"]
+                }
+            ],
+            order:[...sort]
+        })
+       
+        // 1. Tạo Workbook và Worksheet
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Danh sách Công việc');
+
+        // 2. Định nghĩa các cột (headers)
+        worksheet.columns = [
+            { header: 'STT', key: 'stt', width: 10 },
+            { header: 'Tên công việc', key: 'taskName', width: 35 },
+            { header: 'Dự án', key: 'project', width: 25 },
+            { header: 'Trạng thái', key: 'status', width: 15 },
+            { header: 'Độ ưu tiên', key: 'priority', width: 15 },
+            { header: 'Ngày bắt đầu', key: 'startDate', width: 15 },
+            { header: 'Deadline', key: 'endDate', width: 15 },
+            { header: 'Ngày hoàn thành', key: 'completedDate', width: 15 },
+            { header: 'Người tạo', key: 'creator', width: 20 },
+            { header: 'Người tham gia', key: 'members', width: 40 },
+            { header: 'Mô tả', key: 'description', width: 50 }
+        ];
+
+        // 3. Style cho hàng tiêu đề
+        worksheet.getRow(1).font = { bold: true };
+        worksheet.getRow(1).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFD3D3D3' }
+        };
+        worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+
+        // 4. Helper để xử lý dữ liệu trước khi thêm vào
+        // Helper format ngày
+        const formatDate = (date) => {
+            if (!date) return '';
+            const d = new Date(date);
+            return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+        };
+
+        // Helper map trạng thái
+        const statusMap = {
+            'initial': 'Khởi tạo',
+            'doing': 'Đang làm',
+            'finish': 'Hoàn thành',
+            'pending': 'Đang chờ',
+            'notFinish': 'Chưa hoàn thành'
+        };
+
+        // Helper map độ ưu tiên
+        const priorityMap = {
+            'low': 'Thấp',
+            'medium': 'Trung bình',
+            'high': 'Cao'
+        };
+
+        // 5. Thêm dữ liệu (finalList) vào worksheet
+        finalList.forEach((task, index) => {
+            const taskJson = task.toJSON(); // Dùng toJSON() để lấy data sạch
+
+            // Xử lý dữ liệu từ các quan hệ
+            const creator = taskJson.TaskCreator 
+                ? `${taskJson.TaskCreator.FirstName} ${taskJson.TaskCreator.LastName}` 
+                : '';
+            
+            const project = taskJson.ParentProject?.Name || 'Không thuộc dự án';
+
+            const members = taskJson.TaskMembers && taskJson.TaskMembers.length > 0
+                ? taskJson.TaskMembers.map(m => `${m.FirstName} ${m.LastName}`).join(', ')
+                : 'Không có';
+
+            // Thêm dòng mới vào file
+            worksheet.addRow({
+                stt: index + 1,
+                taskName: taskJson.TaskName,
+                project: project,
+                status: statusMap[taskJson.Status] || taskJson.Status,
+                priority: priorityMap[taskJson.Priority] || taskJson.Priority,
+                startDate: formatDate(taskJson.Start_date),
+                endDate: formatDate(taskJson.End_date),
+                completedDate: formatDate(taskJson.completed_date),
+                creator: creator,
+                members: members,
+                description: taskJson.Description || ''
+            });
+        });
+
+        // 6. Cấu hình wrap text cho các ô
+        worksheet.eachRow((row) => {
+            row.eachCell((cell) => {
+                cell.alignment = { vertical: 'middle', wrapText: true };
+            });
+        });
+
+        // 7. Set headers cho response
+        const fileName = `danh_sach_cong_viec_${Date.now()}.xlsx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+
+        // 8. Ghi file Excel ra response
+        await workbook.xlsx.write(res);
+        res.end(); // Kết thúc response
+        
+    } catch (error) {
+        return res.status(500).json({
+            success:false,
+            message:"Đã có lỗi khi xuất file Excel",
+            error: error.message
+        })
+    }
+}
 
