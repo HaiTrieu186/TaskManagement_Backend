@@ -267,6 +267,16 @@ module.exports.getTask = async (req, res) =>{
             where :{id: id, deleted:false},
             include:[
                {
+                    model: model.User,
+                    as: "TaskCreator",
+                    attributes: ["FirstName", "LastName"]
+                },
+                {
+                    model: model.Project,
+                    as: "ParentProject",
+                    attributes: ["Name"]
+                },
+                 {
                  model:model.User,
                  as:"TaskMembers",
                  attributes:["id","FirstName","LastName"],
@@ -274,10 +284,11 @@ module.exports.getTask = async (req, res) =>{
                     model:model.TaskMember,
                     attributes:["joined_at"]
                  }
-               }
+               },
 
             ]
         })
+
         if (!task){
             return res.status(404).json({
                 success:false,
@@ -296,10 +307,31 @@ module.exports.getTask = async (req, res) =>{
                 })
         }
 
+     
+        const taskJson = task.toJSON();
+        // 1. Làm phẳng TaskCreator
+        if (taskJson.TaskCreator) {
+            taskJson.creator_name = `${taskJson.TaskCreator.FirstName} ${taskJson.TaskCreator.LastName}`;
+            delete taskJson.TaskCreator;
+        }
+        // 2. Làm phẳng ParentProject
+        if (taskJson.ParentProject) {
+            taskJson.project_name = taskJson.ParentProject.Name;
+            delete taskJson.ParentProject;
+        }
+        // 3. Làm phẳng TaskMembers
+        if (taskJson.TaskMembers && Array.isArray(taskJson.TaskMembers)) {
+            taskJson.TaskMembers = taskJson.TaskMembers.map(member => {
+                member.joined_at = member.TaskMember?.joined_at; // Lấy joined_at từ object lồng nhau
+                delete member.TaskMember; // Xóa object lồng nhau
+                return member;
+            });
+        }
+
         return res.status(200).json({
             success:true,
             message:"Lấy công việc thành công",
-            task:task.toJSON()
+            task:taskJson
         });
 
     } catch (error) {

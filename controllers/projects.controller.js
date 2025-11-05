@@ -1,9 +1,10 @@
 const model = require("../models/index.model");
-const { Op, literal } = require("sequelize");
+const { Op, literal, where } = require("sequelize");
 const paginationHelper=require("../helpers/pagination.helper")
 const {  sort_values} = require("../helpers/find_check.helper");
 const ExcelJS= require("exceljs")
 
+// [GET] /projects
 module.exports.getProjects= async (req , res) => {
     try {   
         const id =req.user.id;
@@ -181,3 +182,311 @@ module.exports.getProjects= async (req , res) => {
         })
     }
 };
+
+// [GET] /projects/:id
+module.exports.getProject= async (req , res) => {
+    try {   
+        const taskId =req.params.id;
+        const userId= req.user.id;
+        const find={
+            deleted:false,
+            id: taskId
+        }
+
+        const project= await model.Project.findOne({
+            where:find,
+            include:[
+                {
+                    model:model.User,
+                    as:"ProjectMembers",
+                    attributes:["id","FirstName","LastName","Email","avatar"],
+                    through: {
+                        attributes: ["role", "joined_at"]
+                    }
+                },
+                {
+                    model: model.User,
+                    as: "ProjectManager",
+                    attributes: ["FirstName", "LastName"],
+                    required: false
+                }
+            ]
+        })
+
+        if (!project)
+            return res.status(404).json({
+                success:false,
+                message:"Không có dự án hợp lệ"
+            })
+
+        if (req.user.Role !== "admin") {
+            const isMember = project.ProjectMembers.some(member => member.id === userId);
+            if (!isMember) {
+                return res.status(403).json({ 
+                    success: false,
+                    message: "Bạn không có quyền truy cập dự án này"
+                });
+            }
+        }    
+      
+        // Làm phẳng lại dữ liệu
+        const projectJson = project.toJSON();
+        if (projectJson.ProjectMembers && Array.isArray(projectJson.ProjectMembers)) {
+            projectJson.ProjectMembers = projectJson.ProjectMembers.map(member => {
+                // Gộp 'role' và 'joined_at' ra ngoài
+                member.role = member.ProjectMember?.role;
+                member.joined_at = member.ProjectMember?.joined_at;
+                delete member.ProjectMember; // Xóa object lồng nhau
+                return member;
+            });
+        }
+        if (projectJson.ProjectManager) {
+            projectJson.manager_name = `${projectJson.ProjectManager.FirstName} ${projectJson.ProjectManager.LastName}`;
+            delete projectJson.ProjectManager; // Xóa object lồng nhau
+        } else {
+            projectJson.manager_name = "Không có";
+        }
+
+
+
+        return res.status(200).json({
+            success:true,
+            message:"Đã lấy thành công dự án",
+            project:projectJson,
+        }) 
+        
+    } catch (error) {
+        return res.status(500).json({
+            success:false,
+            message:"Đã có lỗi khi lấy dự án",
+            error:error.message
+        })
+    }
+};
+
+// [DELETE] /projects/delete/:id
+module.exports.delete = async (req , res) => {
+    try {   
+        const projectID =req.params.id;
+
+        const project = await model.Project.findOne({
+            where:{id:projectID, deleted:false},
+        })
+
+        if (!project)
+            return res.status(404).json({
+                success:false,
+                message:"Không có dự án hợp lệ"
+            })
+
+        // Kiểm tra (chỉ lead và admin được xóa)
+        if (req.user.Role!=="admin"){
+             const isLead= project.Manager_id === req.user.id
+             if (!isLead)
+                return res.status(403).json({
+                    success:false,
+                    message:"Bạn không có quyền xóa dự án này"
+                })
+        }
+
+        project.deleted=true;
+        project.deleted_at= new Date();
+        await project.save();
+        
+        return res.status(200).json({
+            success:true,
+            message:"Đã xóa dự án thành công !"
+        }) 
+        
+    } catch (error) {
+        return res.status(500).json({
+            success:false,
+            message:"Đã có lỗi khi lấy dự án",
+            error:error.message
+        })
+    }
+};
+
+// [POST] /projects/create
+module.exports.create = async (req, res) => {
+    try {
+        const data = req.body;
+        const userId = req.user.id;
+
+        const newProject = await model.Project.create({
+            ...data,
+            Manager_id: userId,
+            deleted: false
+        });
+
+        //  thêm Manager (người tạo) vào bảng ProjectMember
+        await newProject.addProjectMember(userId, {
+            through: {
+                role: 'lead', 
+                joined_at: new Date()
+            }
+        });
+
+        // Lấy lại project vừa tạo (kèm tên Manager) để trả về
+        const project = await model.Project.findOne({
+            where: { id: newProject.id },
+            include: [{
+                model: model.User,
+                as: "ProjectManager",
+                attributes: ["FirstName", "LastName"]
+            }]
+        });
+
+        //  Làm phẳng
+        const projectJson = project.toJSON();
+        if (projectJson.ProjectManager) {
+            projectJson.manager_name = `${projectJson.ProjectManager.FirstName} ${projectJson.ProjectManager.LastName}`;
+            delete projectJson.ProjectManager;
+        }
+
+        return res.status(201).json({
+            success: true,
+            message: "Đã tạo dự án thành công",
+            project: projectJson
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Đã có lỗi khi tạo dự án",
+            error: error.message
+        });
+    }
+};
+
+// [PATCH] /projects/:id
+module.exports.updateProject = async (req, res) => {
+    try {
+        const projectId = req.params.id;
+        const userId = req.user.id;
+        const dataToUpdate = req.body; 
+
+        const project = await model.Project.findOne({
+            where: { id: projectId, deleted: false }
+        });
+
+        if (!project) {
+            return res.status(404).json({
+                success: false,
+                message: "Không tìm thấy dự án"
+            });
+        }
+
+       // Kiểm tra (chỉ lead và admin được sửa)
+        if (req.user.Role!=="admin"){
+             const isLead= project.Manager_id === userId
+             if (!isLead)
+                return res.status(403).json({
+                    success:false,
+                    message:"Bạn không có quyền cập nhật thông tin dự án này"
+                })
+        }
+
+        // Cập nhật dữ liệu
+        await project.update(dataToUpdate);
+
+        // Lấy lại data (kèm tên Manager) để trả về
+        const updatedProject = await model.Project.findOne({
+            where: { id: project.id },
+            include: [{
+                model: model.User,
+                as: "ProjectManager",
+                attributes: ["FirstName", "LastName"]
+            }]
+        });
+        
+        //  Làm phẳng
+        const projectJson = updatedProject.toJSON();
+        if (projectJson.ProjectManager) {
+            projectJson.manager_name = `${projectJson.ProjectManager.FirstName} ${projectJson.ProjectManager.LastName}`;
+            delete projectJson.ProjectManager;
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Cập nhật dự án thành công",
+            project: projectJson
+        });
+
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Đã có lỗi khi cập nhật dự án",
+            error: error.message
+        });
+    }
+};
+
+// [PATCH] /projects/:id/add-members
+module.exports.addMembersToProject = async (req, res) => {
+    try {
+        const projectId = req.params.id;
+        const userId = req.user.id;
+        const { members } = req.body; 
+
+        const project = await model.Project.findOne({
+            where: { id: projectId, deleted: false }
+        });
+
+        if (!project) {
+            return res.status(404).json({
+                success: false,
+                message: "Không tìm thấy dự án"
+            });
+        }
+
+        //  Check quyền (Chỉ Admin hoặc Lead/Manager)
+        if (req.user.Role !== "admin") {
+            const isManager = (project.Manager_id === userId);
+            if (!isManager) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Bạn không có quyền thêm thành viên (Chỉ Manager/Lead mới được phép)"
+                });
+            }
+        }
+        
+        const memberData = members.map(member => ({
+            Project_id: projectId,
+            Member_id: member.member_id,
+            role: member.role,
+            joined_at: new Date() 
+        }));
+
+        // 4. Thực hiện Upsert
+        // - Tạo mới nếu (Project_id, Member_id) chưa tồn tại.
+        // - Cập nhật (role) nếu (Project_id, Member_id) đã tồn tại.
+        const promises = memberData.map(data => 
+            model.ProjectMember.upsert(data)
+        );
+        
+        await Promise.all(promises);
+
+        return res.status(200).json({
+            success: true,
+            message: "Đã thêm/cập nhật thành viên vào dự án thành công"
+        });
+
+    } catch (error) {
+        // Bắt lỗi  member_id không tồn tại (lỗi khóa ngoại)
+         if (error.name === 'SequelizeForeignKeyConstraintError') {
+             return res.status(404).json({
+                success: false,
+                message: "Một hoặc nhiều Member ID không tồn tại trong hệ thống (bảng Users).",
+                error: error.message
+            });
+         }
+        return res.status(500).json({
+            success: false,
+            message: "Đã có lỗi khi thêm thành viên",
+            error: error.message
+        });
+    }
+};
+
+
