@@ -264,7 +264,7 @@ module.exports.getProject= async (req , res) => {
     }
 };
 
-// [DELETE] /projects/delete/:id
+// [DELETE] /projects/:id
 module.exports.delete = async (req , res) => {
     try {   
         const projectID =req.params.id;
@@ -440,9 +440,9 @@ module.exports.addMembersToProject = async (req, res) => {
             });
         }
 
-        //  Check quyền (Chỉ Admin hoặc Lead/Manager)
+       // Check quyền (Chỉ Manager/Lead)
         if (req.user.Role !== "admin") {
-            const isManager = (project.Manager_id === userId);
+            const isManager = (project.Manager_id === userId); 
             if (!isManager) {
                 return res.status(403).json({
                     success: false,
@@ -451,16 +451,33 @@ module.exports.addMembersToProject = async (req, res) => {
             }
         }
         
-        const memberData = members.map(member => ({
+       
+        // Lọc 1: Lọc bỏ Manager ra khỏi danh sách.
+        const safeMembers = members.filter(member => 
+            member.member_id !== project.Manager_id
+        );
+
+        // Lọc 2: Kiểm tra xem trong danh sách trên có ai bị gán 'lead' không.
+        const hasNewLead = safeMembers.some(member => member.role === 'lead');
+        if (hasNewLead) {
+             return res.status(400).json({
+                success: false,
+                message: `Không thể gán vai trò 'lead' mới. Manager (User ID ${project.Manager_id}) là 'lead' duy nhất.`
+            });
+        }
+        
+    
+
+        // Chuẩn bị dữ liệu từ danh sách đã lọc
+        const memberData = safeMembers.map(member => ({
             Project_id: projectId,
             Member_id: member.member_id,
-            role: member.role,
+            role: member.role, // Sẽ chỉ là 'member' hoặc 'viewer'
             joined_at: new Date() 
         }));
 
-        // 4. Thực hiện Upsert
-        // - Tạo mới nếu (Project_id, Member_id) chưa tồn tại.
-        // - Cập nhật (role) nếu (Project_id, Member_id) đã tồn tại.
+
+        // Thực hiện Upsert với Promise.all
         const promises = memberData.map(data => 
             model.ProjectMember.upsert(data)
         );
@@ -469,11 +486,10 @@ module.exports.addMembersToProject = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "Đã thêm/cập nhật thành viên vào dự án thành công"
+            message: "Đã thêm/cập nhật thành viên thành công (Manager/Lead không bị ảnh hưởng)."
         });
 
     } catch (error) {
-        // Bắt lỗi  member_id không tồn tại (lỗi khóa ngoại)
          if (error.name === 'SequelizeForeignKeyConstraintError') {
              return res.status(404).json({
                 success: false,
