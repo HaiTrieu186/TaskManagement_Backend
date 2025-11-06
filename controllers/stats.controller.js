@@ -254,3 +254,87 @@ module.exports.taskStatus=async (req, res) =>{
     }
 }
 
+// [GET] /stats/project-summary
+module.exports.projectSummary= async (req, res) =>{
+    try {
+        const userID = req.user.id;
+         const find={
+            deleted:false
+        }
+        const includeObj={
+            model:model.User,
+            as:"ProjectMembers",
+            attributes:[],
+            required: false
+        }
+
+        if (req.user.Role!=="admin"){
+             includeObj.where={id: userID}
+             includeObj.required= true
+        }
+
+        const joinProject = await model.Project.findAll({
+            where:find,
+            include:[includeObj],
+            attributes:["id"]
+        })
+
+        if (!joinProject || joinProject.length===0)
+            return res.status(404).json({
+                success:true,
+                message:"Không có dự án nào để thống kê"
+            })
+
+        const idList= joinProject.map(project => project.id);
+        
+        const statsProject = await model.Project.findAll({
+            where:{
+                id:{
+                    [Op.in]:idList
+                }
+            },
+            include:[
+                {
+                    model:model.Task,
+                    as:"ManagedTasks",
+                    attributes:[],
+                    required: false
+                }
+            ],
+            attributes:[
+                "id","Name",
+                [fn("COUNT",col("ManagedTasks.id")),"total_tasks"],
+                [literal("SUM(CASE WHEN ManagedTasks.Status='finish' THEN 1 ELSE 0 END)"),"completed_tasks"],
+                [literal(`(CASE WHEN COUNT(ManagedTasks.id) = 0 THEN 0 
+                ELSE (SUM(CASE WHEN ManagedTasks.Status = 'finish' THEN 1 ELSE 0 END) * 100.0) / COUNT(ManagedTasks.id) END)`),'completion_rate']
+            ],
+            distinct:true,
+            group: ["Project.id"]
+        })
+
+        const data= statsProject.map( project =>{
+            const projectJSON= project.toJSON();
+            return {
+                id:projectJSON.id,
+                Name: projectJSON.Name,
+                total_tasks: parseInt(projectJSON.total_tasks, 10), 
+                completed_tasks: parseInt(projectJSON.completed_tasks, 10) || 0, // (|| 0 để xử lý null)
+                completion_rate: parseFloat(parseFloat(projectJSON.completion_rate).toFixed(2))
+            }
+        })
+
+
+        return res.status(200).json({
+            success:true,
+            message:"Lấy thống kê tổng quan thành công",
+            stats: data
+        })
+
+    } catch (error) {
+        return res.status(500).json({
+            success:false,
+            message:"Đã có lỗi khi lấy dữ liệu thống kê theo dự án",
+            error: error.message
+        })
+    }
+}
