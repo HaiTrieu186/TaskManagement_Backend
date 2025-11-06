@@ -1,7 +1,5 @@
 const model = require("../models/index.model");
 const { Op, fn, col, literal } = require("sequelize");
-const paginationHelper=require("../helpers/pagination.helper")
-const {  sort_values} = require("../helpers/find_check.helper");
 
 // [GET] /stats/overview
 module.exports.overview= async (req, res) =>{
@@ -78,7 +76,7 @@ module.exports.overview= async (req, res) =>{
             success:true,
             message:"Lấy thống kê tổng quan thành công",
             overview: {
-                Total: total,
+                total: total,
                 completed: completed,
                 failed: failed,
                 in_progress:in_progress,
@@ -104,8 +102,6 @@ module.exports.progressChart=async (req, res) =>{
         const labels=[];
         const created=[];
         const completed=[];
-        let groupBy;
-        let range;
         const find={
             deleted:false
         }
@@ -121,10 +117,12 @@ module.exports.progressChart=async (req, res) =>{
              includeObj.required= true
         }
 
+        let groupBy;
+        let range;
         // Lập gom theo (tuần, tháng, năm) - tính từ hôm nay trờ về trưỡc
         if (period==="week"){
             range= { [Op.gte]: literal("DATE_SUB(NOW(), INTERVAL 7 DAY)")};
-            groupBy= fn("DAY",col("Task.created_at"));
+            groupBy= fn("DATE",col("Task.created_at"));
         }
 
         if (period==="month"){
@@ -154,9 +152,16 @@ module.exports.progressChart=async (req, res) =>{
         })
 
         const formatLabel = (item) => {
-            if (period === 'week') return `DAY: ${item.getDataValue("groupRange")}`; 
-            if (period === 'year') return `MONTH: ${item.getDataValue("groupRange")}`; 
-            return `WEEK: ${item.getDataValue("groupRange")}`; 
+            const created_at = item.getDataValue("Task.created_at");
+            const year= new Date(created_at).getFullYear();
+
+            if (period === 'week')  
+                return `DAY: ${item.getDataValue("groupRange")}`;
+            if (period === 'month') 
+                return `WEEK: ${item.getDataValue("groupRange")} -${year}`;  
+            if (period === 'year')  
+                return `MONTH: ${item.getDataValue("groupRange")} -${year}`; 
+           
         };
 
         for (let item of stats){
@@ -216,10 +221,28 @@ module.exports.taskStatus=async (req, res) =>{
             distinct:true
         })
 
+        const data = stats.toJSON();
+        const statusData = {
+            initial: parseInt(data.initial) || 0,
+            doing: parseInt(data.doing) || 0,
+            pending: parseInt(data.pending) || 0,
+            finish: parseInt(data.finish) || 0,
+            notFinish: parseInt(data.notFinish) || 0
+        };
+        const total = Object.values(statusData).reduce((sum, val) => sum + val, 0);
+        
+        if (total === 0) {
+            return res.status(200).json({
+                success: true,
+                message: "Chưa có công việc nào để thống kê",
+                stats: statusData
+            });
+        }
+
         return res.status(200).json({
             success:true,
             message:"Lấy thống kê tổng quan thành công",
-            stats
+            stats: statusData
         })
 
     } catch (error) {
