@@ -7,6 +7,7 @@ const authMiddleware =require("../middleware/auth/auth.verifyToken.middleware")
 router.get("/me",authMiddleware.verifyToken,controller.me);
 router.post("/login",validateMiddleware.validateLogin,controller.login);
 router.post("/register",validateMiddleware.validateRegister,controller.register);
-
+router.post("/logout", authMiddleware.verifyToken, controller.logout);
+router.post("/refresh",controller.refresh);
 
 module.exports= router;

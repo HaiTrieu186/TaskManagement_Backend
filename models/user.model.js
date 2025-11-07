@@ -44,7 +44,11 @@ deleted:{
 ,deleted_at: {
    type: DataTypes.DATE,
 }
-
+, 
+refreshToken: {
+    type: DataTypes.STRING(500),
+    allowNull: true
+}
 
 },{
  tableName:"users",
