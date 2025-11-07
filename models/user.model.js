@@ -49,6 +49,12 @@ refreshToken: {
     type: DataTypes.STRING(500),
     allowNull: true
 }
+,
+OTP: {
+  type: DataTypes.STRING(500),
+  allowNull: true,
+},
+
 
 },{
  tableName:"users",

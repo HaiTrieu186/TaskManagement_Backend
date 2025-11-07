@@ -2,6 +2,7 @@ const {User}=require("../models/index.model");
 const bcrypt= require("bcryptjs")
 const jwt= require("jsonwebtoken")
 const model = require("../models/index.model")
+const transporter = require("../config/mail");
 
 // [POST] /auth/register
 module.exports.register= async (req,res)=>{
@@ -187,6 +188,48 @@ module.exports.refresh= async (req,res) =>{
     }
 }
 
+// [POST] /auth/change-password 
+module.exports.changePassword= async (req,res) =>{
+    try {
+        const {oldPassword, newPassword, confirmPassword} = req.body;
+        
+        const user= await  model.User.findOne({
+            where:{id: req.user.id}
+        })
+
+        if (!user)
+            return res.status(404).json({ 
+            success: false, 
+            message: "Không tìm thấy người dùng" 
+        });
+
+        const isValidPassword = await bcrypt.compare(oldPassword, user.Password);
+        if (!isValidPassword)
+        return res.status(401).json({
+            success:false,
+            message:"Mật khẩu hiện tại không chính xác !"
+        })
+        
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+        user.Password=hashedPassword;
+        await user.save();
+
+        return res.status(200).json({
+            success:true, 
+            message:"Đổi mật khẩu thành công"
+        });
+    
+    } catch (error) {
+        return res.status(500).json({
+            success:false,
+            message:"Đã có lỗi trong lúc đổi mật khẩu",
+            error:error.message
+        })
+    }
+}
+
 // [GET] /auth/me
 module.exports.me= async (req,res) =>{
     try {
@@ -218,3 +261,157 @@ module.exports.me= async (req,res) =>{
     }
 
 }
+
+
+
+////////////////////-- QUÊN MẬT KHẨU --//////////////////////
+
+// [POST] /auth/forgot-password
+module.exports.forgotPassword = async (req, res) => {
+  try {
+    const { Email } = req.body;
+
+    const user = await User.findOne({ where: { Email } });
+    if (!user)
+      return res.status(404).json({
+        success: false,
+        message: "Không tồn tại người dùng.",
+      });
+
+    // Tạo token làm OTP 
+    const otp = jwt.sign(
+      { id: user.id, Email: user.Email },
+      process.env.OTP_SECRET_KEY,
+      { expiresIn: "5m" }
+    );
+
+    user.OTP = otp;
+    await user.save();
+
+    //  Gửi otp qua email
+    await transporter.sendMail({
+      from: `"Tasks-Managerment APP Support" <${process.env.EMAIL_USER}>`,
+      to: user.Email,
+      subject: "Mã khôi phục mật khẩu của bạn",
+      html: `
+        <p>Xin chào ${user.FirstName || "bạn"},</p>
+        <p>Mã đặt lại mật khẩu của bạn là:</p>
+        <h3 style="color:blue;">${otp}</h3>
+        <p>Mã này có hiệu lực trong 5 phút. Dán mã này vào ô “Mã khôi phục” trong app.</p>
+      `,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Mã khôi phục đã được gửi qua email.",
+    });
+  } catch (err) {
+    return res.status(500).json({ 
+        success: false, 
+        message: "Lỗi khi gửi email", 
+        error: err.message 
+    });
+  }
+};
+
+// [POST] /auth/verify-reset-token
+module.exports.verifyOTP = async (req, res) => {
+  try {
+    const { otp } = req.body;
+    if (!otp)
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu mã xác nhận để xác minh"
+      });
+
+
+    //  Verify otp
+    let decoded;
+    try {
+      decoded = jwt.verify(otp, process.env.OTP_SECRET_KEY);
+    } catch (err) {
+      const msg =
+        err.name === "TokenExpiredError"
+          ? "Mã đã hết hạn, vui lòng yêu cầu lại"
+          : "Mã không hợp lệ";
+      return res.status(400).json({ success: false, message: msg });
+    }
+
+    //  Kiểm tra token có đúng không
+    const user = await User.findOne({
+      where: { id: decoded.id, OTP: otp },
+    });
+
+    if (!user)
+      return res.status(400).json({
+        success: false,
+        message: "Mã không tồn tại hoặc đã được sử dụng",
+      });
+
+    return res.status(200).json({
+      success: true,
+      message: "Mã hợp lệ, bạn có thể tiếp tục",
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi server khi xác minh OTP",
+      error: err.message,
+    });
+  }
+};
+
+// [POST] /auth/reset-password
+module.exports.resetPassword = async (req, res) => {
+  try {
+    const { otp, newPassword, confirmPassword } = req.body;
+    if (!otp || !newPassword)
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu token hoặc mật khẩu mới",
+      });
+
+    // Verify otp
+    let decoded;
+    try {
+      decoded = jwt.verify(otp, process.env.OTP_SECRET_KEY);
+    } catch (err) {
+      const msg =
+        err.name === "TokenExpiredError"
+          ? "OTP đã hết hạn, vui lòng yêu cầu lại"
+          : "OTP không hợp lệ";
+      return res.status(400).json({ success: false, message: msg });
+    }
+
+    // Check OTP
+    const user = await User.findOne({
+      where: { id: decoded.id, OTP: otp },
+    });
+
+    if (!user)
+      return res.status(400).json({
+        success: false,
+        message: "OTP không hợp lệ hoặc đã được sử dụng",
+      });
+
+    //  Cập nhật mật khẩu mới
+    const hashed = await bcrypt.hash(newPassword, 10);
+    user.Password = hashed;
+    user.OTP = null; // xoá OTP
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Đặt lại mật khẩu thành công",
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi khi đặt lại mật khẩu",
+      error: err.message,
+    });
+  }
+};
+
+/////////////////////////////////////////////////////////////
+
