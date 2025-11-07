@@ -338,3 +338,71 @@ module.exports.projectSummary= async (req, res) =>{
         })
     }
 }
+
+
+// [GET] /stats/user-performance
+module.exports.userPerformance= async (req, res) =>{
+    try {
+        const find={
+            Role:{
+                [Op.ne]:"admin"
+            },
+            deleted:false
+        }
+        const includeObj={
+            model:model.Task,
+            as:"JoinedTasks",
+            attributes:[],
+            required: false
+        }
+
+        if (req.user.Role!=="admin"){
+             return res.status(403).json({
+                success:false,
+                message:"Bạn không có quyền dùng API này"
+             })
+        }
+
+
+        const statsUser= await model.User.findAll({
+            where:find,
+            include:[includeObj],
+            attributes:[
+                "id","FirstName","LastName","Email",
+                [literal("SUM(CASE WHEN JoinedTasks.Creator_id= User.id THEN 1 ELSE 0 END)"),"tasks_created"],
+                [literal("SUM(CASE WHEN JoinedTasks.Status='finish' THEN 1 ELSE 0 END)"),"tasks_completed"],
+                [literal("SUM(CASE WHEN JoinedTasks.Creator_id!= User.id THEN 1 ELSE 0 END)"),"task_assigned"]
+            ],
+            group:["User.id"],
+            distinct:true,
+        })
+
+        const data= statsUser.map(user =>{
+            const json=user.toJSON();
+
+            return {
+                id:json.id,
+                FirstName:json.FirstName,
+                LastName:json.LastName,
+                Email:json.Email,
+                tasks_created: parseInt(json.tasks_created,10),
+                tasks_completed: parseInt(json.tasks_completed,10),
+                task_assigned: parseInt(json.task_assigned,10),
+            }
+        })
+
+       
+        return res.status(200).json({
+            success:true,
+            message:"Lấy thống kê tổng quan thành công",
+            stats: data
+        })
+
+    } catch (error) {
+        return res.status(500).json({
+            success:false,
+            message:"Đã có lỗi khi lấy dữ liệu thống kê theo dự án",
+            error: error.message
+        })
+    }
+}
