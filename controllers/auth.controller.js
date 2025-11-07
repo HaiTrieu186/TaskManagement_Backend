@@ -126,7 +126,7 @@ module.exports.logout= async (req,res) =>{
                 message:"Đăng xuất thành công"
             })
         } 
-        
+
     } catch (error) {
         return res.status(500).json({
             success:false,
@@ -147,12 +147,14 @@ module.exports.refresh= async (req,res) =>{
                 message: "Refresh Token là bắt buộc" 
         });
 
+        console.log(refreshToken);
+        
         const user = await model.User.findOne({
             where:{refreshToken: refreshToken}
         });
 
-        if (!user) return 
-            res.status(403).json({
+        if (!user) 
+            return res.status(403).json({
                 success:false, 
                 message: "Refresh Token không hợp lệ" 
             });
@@ -184,7 +186,6 @@ module.exports.refresh= async (req,res) =>{
         })
     }
 }
-
 
 // [GET] /auth/me
 module.exports.me= async (req,res) =>{
