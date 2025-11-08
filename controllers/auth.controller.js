@@ -294,7 +294,7 @@ module.exports.forgotPassword = async (req, res) => {
       to: user.Email,
       subject: "Mã khôi phục mật khẩu của bạn",
       html: `
-        <p>Xin chào ${user.FirstName || "bạn"},</p>
+        <p>Xin chào ${user.FirstName + user.LastName || "bạn"},</p>
         <p>Mã đặt lại mật khẩu của bạn là:</p>
         <h3 style="color:blue;">${otp}</h3>
         <p>Mã này có hiệu lực trong 5 phút. Dán mã này vào ô “Mã khôi phục” trong app.</p>

@@ -119,20 +119,38 @@ module.exports.progressChart=async (req, res) =>{
 
         let groupBy;
         let range;
+        let attributes 
         // Lập gom theo (tuần, tháng, năm) - tính từ hôm nay trờ về trưỡc
         if (period==="week"){
             range= { [Op.gte]: literal("DATE_SUB(NOW(), INTERVAL 7 DAY)")};
             groupBy= fn("DATE",col("Task.created_at"));
+            attributes = [
+                [fn("DATE", col("Task.created_at")), "groupDate"],
+            ];
         }
 
         if (period==="month"){
             range= { [Op.gte]: literal("DATE_SUB(NOW(), INTERVAL 1 MONTH)")};
-            groupBy= fn("WEEK",col("Task.created_at"));
+            groupBy= [
+                fn("WEEK",col("Task.created_at")),
+                fn("YEAR",col("Task.created_at"))
+            ];
+            attributes = [
+                [fn("YEAR", col("Task.created_at")), "groupYear"],  
+                [fn("WEEK", col("Task.created_at")), "groupWeek"], 
+            ];
         }
 
          if (period==="year"){
             range= { [Op.gte]: literal("DATE_SUB(NOW(), INTERVAL 1 YEAR)")};
-            groupBy= fn("MONTH",col("Task.created_at"));
+            groupBy= [
+                fn("MONTH",col("Task.created_at")),
+                fn("YEAR",col("Task.created_at"))
+            ];
+            attributes = [
+                [fn("YEAR", col("Task.created_at")), "groupYear"],   
+                [fn("MONTH", col("Task.created_at")), "groupMonth"],
+            ];
         }
 
         find.created_at=range;
@@ -142,26 +160,29 @@ module.exports.progressChart=async (req, res) =>{
             where:find,
             include:[includeObj],
             attributes:[
-                [groupBy, 'groupRange'],
+                ...attributes,
                 [fn("COUNT",col("Task.id")),"created"],
                 [literal("SUM(CASE WHEN Status= 'finish' THEN 1 ELSE 0 END)"),"completed"]
             ],
-            order: [[groupBy, 'ASC']],
-            group:[groupBy],
+            group:groupBy,
             distinct:true
         })
 
         const formatLabel = (item) => {
-            const created_at = item.getDataValue("Task.created_at");
-            const year= new Date(created_at).getFullYear();
-
-            if (period === 'week')  
-                return `DAY: ${item.getDataValue("groupRange")}`;
-            if (period === 'month') 
-                return `WEEK: ${item.getDataValue("groupRange")} -${year}`;  
-            if (period === 'year')  
-                return `MONTH: ${item.getDataValue("groupRange")} -${year}`; 
-           
+            if (period === 'week') {
+                const date = item.getDataValue("groupDate");
+                return `DAY: ${date}`; // Trả về 'DAY: 2025-11-08'
+            }
+            if (period === 'month') {
+                const year = item.getDataValue("groupYear");
+                const week = item.getDataValue("groupWeek");
+                return `WEEK:${week} - ${year}`; // Trả về 'WEEK: 45-2025'
+            }
+            if (period === 'year') {
+                const year = item.getDataValue("groupYear");
+                const month = item.getDataValue("groupMonth");
+                return `MONTH:${month} - ${year}`; // Trả về 'MONTH: 11-2025'
+            }
         };
 
         for (let item of stats){
@@ -339,7 +360,6 @@ module.exports.projectSummary= async (req, res) =>{
     }
 }
 
-
 // [GET] /stats/user-performance
 module.exports.userPerformance= async (req, res) =>{
     try {
@@ -355,14 +375,6 @@ module.exports.userPerformance= async (req, res) =>{
             attributes:[],
             required: false
         }
-
-        if (req.user.Role!=="admin"){
-             return res.status(403).json({
-                success:false,
-                message:"Bạn không có quyền dùng API này"
-             })
-        }
-
 
         const statsUser= await model.User.findAll({
             where:find,

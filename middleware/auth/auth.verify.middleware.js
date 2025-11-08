@@ -1,6 +1,18 @@
 const jwt= require("jsonwebtoken")
 const model=require("../../models/index.model")
 
+
+module.exports.verifyAdmin = (req, res, next) => {
+    if (req.user.Role !== 'admin') {
+        return res.status(403).json({
+            success: false,
+            message: "Bạn không có quyền truy cập tài nguyên này."
+        });
+    }
+    
+    next();
+};
+
 module.exports.verifyToken = async  (req,res, next )=> {
     
     try {

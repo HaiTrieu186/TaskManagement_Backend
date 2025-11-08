@@ -101,6 +101,9 @@ module.exports.validateChangePassword = (req, res, next) => {
         errors.push({ field: 'newPassword', message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
     }
 
+    if (newPassword===oldPassword)
+         errors.push({ field: 'newPassword', message: 'Mật khẩu mới không được trùng mật khẩu cũ' });
+
     // Check 'confirmPassword'
     if (newPassword !== confirmPassword) {
         errors.push({ field: 'confirmPassword', message: 'Xác nhận mật khẩu không khớp' });
@@ -157,7 +160,6 @@ module.exports.validateVerifyOTP = (req, res, next) => {
 
 // [POST] /auth/reset-password
 module.exports.validateResetPassword = (req, res, next) => {
-    // Thêm confirmPassword vào đây
     const { otp, newPassword, confirmPassword } = req.body;
     const errors = [];
 
