@@ -9,5 +9,5 @@ module.exports =(app) => {
     app.use("/tasks",taskRoute);
     app.use("/projects",projectRoute);
     app.use("/stats",statsRoute);
-    app.use("/user",userRoute);
+    app.use("/users",userRoute);
 }

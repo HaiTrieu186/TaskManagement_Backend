@@ -36,7 +36,7 @@ module.exports.getAll=async (req, res) =>{
 };
 
 // [GET] /user/profile
-module.exports.getProfie=async (req, res) =>{
+module.exports.getProfile=async (req, res) =>{
   try {
     const id= req.user.id;
 
@@ -70,7 +70,7 @@ module.exports.getProfie=async (req, res) =>{
 };
 
 // [PATCH] /user/profile
-module.exports.updateProfie=async (req, res) =>{
+module.exports.updateProfile=async (req, res) =>{
   try {
     const id= req.user.id;
     const {FirstName, LastName, avatar} = req.body;
@@ -149,6 +149,12 @@ module.exports.changeRole= async (req, res) => {
     try {
         const id= req.params.id;
         const { Role } = req.body;
+
+        if (id ===req.user.id)
+        return res.status(400).json({
+            success: false,
+            message: 'Không thể sửa role bản thân'
+        });
 
         const user = await model.User.findOne({
             where:{

@@ -50,12 +50,6 @@ module.exports.validateUpdateRole = (req, res, next) => {
         });
     }
     
-    if (id ===req.user.id)
-        return res.status(400).json({
-            success: false,
-            message: 'Không thể sửa role bản thân'
-        });
-
     //  Validate Role 
     if (!Role) {
         errors.push({ field: 'Role', message: 'Quyền (Role) không được để trống' });

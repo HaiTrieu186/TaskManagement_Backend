@@ -7,18 +7,18 @@ const validateMiddleware = require("../middleware/user.validate.middleware");
 router.use(AuthMiddleware.verifyToken);
 
 
-router.get("/lookup", AuthMiddleware.verifyToken,controller.lookup);
-router.get("/profile", AuthMiddleware.verifyToken, controller.getProfie);
-router.patch("/profile", AuthMiddleware.verifyToken, validateMiddleware.validateUpdateProfile,controller.updateProfie);
+router.get("/lookup",controller.lookup);
+router.get("/profile", controller.getProfile);
+router.patch("/profile", validateMiddleware.validateUpdateProfile,controller.updateProfile);
 
 
 
 // Admin only
 router.patch("/:id/role",
-    AuthMiddleware.verifyToken, AuthMiddleware.verifyAdmin, 
+    AuthMiddleware.verifyAdmin, 
     validateMiddleware.validateUserId, validateMiddleware.validateUpdateRole,
     controller.changeRole
 )
-router.get("/", AuthMiddleware.verifyToken, AuthMiddleware.verifyAdmin,controller.getAll);
+router.get("/",  AuthMiddleware.verifyAdmin,controller.getAll);
 
 module.exports = router;

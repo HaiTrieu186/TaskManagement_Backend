@@ -164,6 +164,7 @@ module.exports.progressChart=async (req, res) =>{
                 [fn("COUNT",col("Task.id")),"created"],
                 [literal("SUM(CASE WHEN Status= 'finish' THEN 1 ELSE 0 END)"),"completed"]
             ],
+            order: [[groupBy[0], "ASC"], ...(groupBy[1] ? [[groupBy[1], "ASC"]] : [])],
             group:groupBy,
             distinct:true
         })
