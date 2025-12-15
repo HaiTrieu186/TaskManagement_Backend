@@ -1,4 +1,4 @@
-const { status_values , priority_values} = require("../helpers/find_check.helper")
+const { task_status_values , task_priority_values} = require("../helpers/find_check.helper")
 
 
 module.exports.validateCreateTask = (req, res, next) => {
@@ -15,14 +15,14 @@ module.exports.validateCreateTask = (req, res, next) => {
     // Kiểm tra Status
     if (!Status) {
         errors.push({ field: 'Status', message: 'Trạng thái không được để trống' });
-    } else if (!status_values.includes(Status)) {
+    } else if (!task_status_values.includes(Status)) {
         errors.push({ field: 'Status', message: 'Trạng thái không hợp lệ' });
     }
 
     // Kiểm tra Priority
     if (!Priority) {
         errors.push({ field: 'Priority', message: 'Độ ưu tiên không được để trống' });
-    } else if (!priority_values.includes(Priority)) {
+    } else if (!task_priority_values.includes(Priority)) {
         errors.push({ field: 'Priority', message: 'Độ ưu tiên không hợp lệ' });
     }
 
@@ -71,14 +71,14 @@ module.exports.validateUpdateTask = (req, res, next) => {
 
     // Kiểm tra Status (nếu có)
     if (Status !== undefined) {
-        if (!status_values.includes(Status)) {
+        if (!task_status_values.includes(Status)) {
             errors.push({ field: 'Status', message: 'Trạng thái không hợp lệ' });
         }
     }
 
     // Kiểm tra Priority (nếu có)
     if (Priority !== undefined) {
-        if (!priority_values.includes(Priority)) {
+        if (!task_priority_values.includes(Priority)) {
             errors.push({ field: 'Priority', message: 'Độ ưu tiên không hợp lệ' });
         }
     }
@@ -120,7 +120,7 @@ module.exports.validateChangeStatus = (req, res, next) => {
     // Kiểm tra Status
     if (!Status) {
         errors.push({ field: 'Status', message: 'Trạng thái không được để trống' });
-    } else if (!status_values.includes(Status)) {
+    } else if (!task_status_values.includes(Status)) {
         errors.push({ field: 'Status', message: 'Trạng thái không hợp lệ' });
     }
 
