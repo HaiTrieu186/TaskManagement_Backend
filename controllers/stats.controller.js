@@ -123,7 +123,7 @@ module.exports.progressChart=async (req, res) =>{
         // Lập gom theo (tuần, tháng, năm) - tính từ hôm nay trờ về trưỡc
         if (period==="week"){
             range= { [Op.gte]: literal("DATE_SUB(NOW(), INTERVAL 7 DAY)")};
-            groupBy= fn("DATE",col("Task.created_at"));
+            groupBy= [fn("DATE",col("Task.created_at"))];
             attributes = [
                 [fn("DATE", col("Task.created_at")), "groupDate"],
             ];
