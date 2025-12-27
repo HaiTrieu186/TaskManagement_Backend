@@ -233,9 +233,9 @@ module.exports.taskStatus=async (req, res) =>{
         const stats= await model.Task.findOne({
             where:find,
             attributes:[
-                [literal("SUM(CASE WHEN Status='initial' AND (End_date >= NOW() OR End_date IS NULL))  THEN 1 ELSE 0 END)"),"initial"],
-                [literal("SUM(CASE WHEN Status='doing'   AND (End_date >= NOW() OR End_date IS NULL))  THEN 1 ELSE 0 END)"),"doing"],
-                [literal("SUM(CASE WHEN Status='pending' AND (End_date >= NOW() OR End_date IS NULL)) THEN 1 ELSE 0 END)"),"pending"],
+                [literal("SUM(CASE WHEN Status='initial' AND (End_date >= NOW() OR End_date IS NULL)  THEN 1 ELSE 0 END)"),"initial"],
+                [literal("SUM(CASE WHEN Status='doing'   AND (End_date >= NOW() OR End_date IS NULL)  THEN 1 ELSE 0 END)"),"doing"],
+                [literal("SUM(CASE WHEN Status='pending' AND (End_date >= NOW() OR End_date IS NULL)  THEN 1 ELSE 0 END)"),"pending"],
             ],
             include:[includeObj],
             distinct:true
