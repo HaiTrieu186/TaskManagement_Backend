@@ -271,138 +271,121 @@ module.exports.forgotPassword = async (req, res) => {
   try {
     const { Email } = req.body;
 
+    // Check user
     const user = await User.findOne({ where: { Email } });
-    if (!user)
+    if (!user) {
       return res.status(404).json({
         success: false,
-        message: "Không tồn tại người dùng.",
+        message: "Email không tồn tại trong hệ thống.",
       });
+    }
 
-    // Tạo token làm OTP 
-    const otp = jwt.sign(
-      { id: user.id, Email: user.Email },
-      process.env.OTP_SECRET_KEY,
-      { expiresIn: "5m" }
-    );
+    // Tạo mã OTP ngẫu nhiên (6 chữ số)
+    const otpRaw = Math.floor(100000 + Math.random() * 900000).toString();
+    const salt = 10;
+    const hashedOTP = await bcrypt.hash(otpRaw, salt);
 
-    user.OTP = otp;
+    // Lưu OTP đã hash và Thời gian hết hạn (5 phút = 300000ms)
+    user.OTP = hashedOTP; 
+    user.OTP_expires = Date.now() + 5 * 60 * 1000; 
     await user.save();
 
-    //  Gửi otp qua email
+    // Gửi email chứa mã số (mã chưa hash)
     await transporter.sendMail({
-      from: `"Tasks-Managerment APP Support" <${process.env.EMAIL_USER}>`,
+      from: `"Task Management App" <${process.env.EMAIL_USER}>`,
       to: user.Email,
-      subject: "Mã khôi phục mật khẩu của bạn",
+      subject: "Mã OTP khôi phục mật khẩu",
       html: `
-        <p>Xin chào ${user.FirstName + user.LastName || "bạn"},</p>
-        <p>Mã đặt lại mật khẩu của bạn là:</p>
-        <h3 style="color:blue;">${otp}</h3>
-        <p>Mã này có hiệu lực trong 5 phút. Dán mã này vào ô “Mã khôi phục” trong app.</p>
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+            <p>Xin chào <b>${user.FirstName} ${user.LastName}</b>,</p>
+            <p>Bạn đã yêu cầu đặt lại mật khẩu. Mã xác thực của bạn là:</p>
+            <h2 style="color: #007bff; letter-spacing: 5px;">${otpRaw}</h2>
+            <p><i>Mã này sẽ hết hạn sau 5 phút. Vui lòng không chia sẻ mã này cho ai khác.</i></p>
+        </div>
       `,
     });
 
     return res.status(200).json({
       success: true,
-      message: "Mã khôi phục đã được gửi qua email.",
+      message: "Mã OTP đã được gửi đến email của bạn.",
     });
+
   } catch (err) {
     return res.status(500).json({ 
         success: false, 
-        message: "Lỗi khi gửi email", 
+        message: "Lỗi hệ thống khi gửi email", 
         error: err.message 
     });
   }
 };
 
-// [POST] /auth/verify-reset-token
+// [POST] /auth/verify-otp
 module.exports.verifyOTP = async (req, res) => {
   try {
-    const { otp } = req.body;
-    if (!otp)
-      return res.status(400).json({
-        success: false,
-        message: "Thiếu mã xác nhận để xác minh"
-      });
+    const { Email, otp } = req.body; 
 
-
-    //  Verify otp
-    let decoded;
-    try {
-      decoded = jwt.verify(otp, process.env.OTP_SECRET_KEY);
-    } catch (err) {
-      const msg =
-        err.name === "TokenExpiredError"
-          ? "Mã đã hết hạn, vui lòng yêu cầu lại"
-          : "Mã không hợp lệ";
-      return res.status(400).json({ success: false, message: msg });
+    const user = await User.findOne({ where: { Email } });
+    if (!user) {
+        return res.status(404).json({ success: false, message: "User không tồn tại" });
     }
 
-    //  Kiểm tra token có đúng không
-    const user = await User.findOne({
-      where: { id: decoded.id, OTP: otp },
-    });
+    // Kiểm tra xem có OTP trong DB không
+    if (!user.OTP || !user.OTP_expires) {
+        return res.status(400).json({ success: false, message: "Vui lòng gửi yêu cầu lấy mã OTP trước" });
+    }
 
-    if (!user)
-      return res.status(400).json({
-        success: false,
-        message: "Mã không tồn tại hoặc đã được sử dụng",
-      });
+    // Kiểm tra thời gian hết hạn 
+    if (new Date() > user.OTP_expires) {
+         return res.status(400).json({ success: false, message: "Mã OTP đã hết hạn. Vui lòng lấy mã mới." });
+    }
+
+    // Xác thực otp
+    const isValidOTP = await bcrypt.compare(otp, user.OTP);
+    
+    if (!isValidOTP) {
+        return res.status(400).json({ success: false, message: "Mã OTP không chính xác" });
+    }
 
     return res.status(200).json({
       success: true,
-      message: "Mã hợp lệ, bạn có thể tiếp tục",
+      message: "Xác thực OTP thành công",
     });
+
   } catch (err) {
-    return res.status(500).json({
-      success: false,
-      message: "Lỗi server khi xác minh OTP",
-      error: err.message,
-    });
+    return res.status(500).json({ success: false, error: err.message });
   }
 };
 
 // [POST] /auth/reset-password
 module.exports.resetPassword = async (req, res) => {
   try {
-    const { otp, newPassword, confirmPassword } = req.body;
-    if (!otp || !newPassword)
-      return res.status(400).json({
-        success: false,
-        message: "Thiếu token hoặc mật khẩu mới",
-      });
+    const { Email, otp, newPassword } = req.body;
+    
+    const user = await User.findOne({ where: { Email } });
+    if (!user) return res.status(404).json({ success: false, message: "User không tồn tại" });
 
-    // Verify otp
-    let decoded;
-    try {
-      decoded = jwt.verify(otp, process.env.OTP_SECRET_KEY);
-    } catch (err) {
-      const msg =
-        err.name === "TokenExpiredError"
-          ? "OTP đã hết hạn, vui lòng yêu cầu lại"
-          : "OTP không hợp lệ";
-      return res.status(400).json({ success: false, message: msg });
+    // Validate lại OTP 
+    if (!user.OTP || new Date() > user.OTP_expires) {
+         return res.status(400).json({ success: false, message: "OTP đã hết hạn hoặc không hợp lệ" });
+    }
+    
+    const isValidOTP = await bcrypt.compare(otp, user.OTP);
+    if (!isValidOTP) {
+        return res.status(400).json({ success: false, message: "Mã OTP không chính xác" });
     }
 
-    // Check OTP
-    const user = await User.findOne({
-      where: { id: decoded.id, OTP: otp },
-    });
-
-    if (!user)
-      return res.status(400).json({
-        success: false,
-        message: "OTP không hợp lệ hoặc đã được sử dụng",
-      });
-
-    //  Cập nhật mật khẩu mới
-    const hashed = await bcrypt.hash(newPassword, 10);
-    user.Password = hashed;
-    user.OTP = null; // xoá OTP
+    // Đổi mật khẩu
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.Password = hashedPassword;
+    
+    // Xóa OTp
+    user.OTP = null;
+    user.OTP_expires = null;
     await user.save();
 
     return res.status(200).json({
       success: true,
-      message: "Đặt lại mật khẩu thành công",
+      message: "Đặt lại mật khẩu thành công. Bạn có thể đăng nhập ngay.",
     });
   } catch (err) {
     return res.status(500).json({

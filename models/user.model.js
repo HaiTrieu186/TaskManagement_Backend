@@ -48,13 +48,17 @@ deleted:{
 refreshToken: {
     type: DataTypes.STRING(500),
     allowNull: true
-}
-,
+},
+
 OTP: {
-  type: DataTypes.STRING(500),
+  type: DataTypes.STRING(10), 
   allowNull: true,
 },
 
+OTP_expires: { 
+    type: DataTypes.DATE,
+    allowNull: true,
+},
 
 },{
  tableName:"users",

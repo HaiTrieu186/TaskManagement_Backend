@@ -27,7 +27,7 @@ module.exports.overview= async (req, res) =>{
                 [fn("COUNT", col("Task.id")),"total"],
                 [literal("SUM(CASE WHEN Status ='finish' THEN 1 ELSE 0 END)"),"completed"],
                 [literal("SUM(CASE WHEN Status ='notFinish' THEN 1 ELSE 0 END)"),"failed"],
-                [literal("SUM(CASE WHEN Status (IN ('initial', 'doing', 'pending') AND (End_date >= NOW() OR End_date IS NULL)) THEN 1 ELSE 0 END)"),"in_progress"],
+                [literal("SUM(CASE WHEN (Status IN ('initial', 'doing', 'pending') AND (End_date >= NOW() OR End_date IS NULL)) THEN 1 ELSE 0 END)"),"in_progress"],
                 [literal("SUM(CASE WHEN End_date < NOW() AND Status IN ('initial', 'doing', 'pending') THEN 1 ELSE 0 END)"),"overdue"]
                 //     [literal(`(
                 //         CASE

@@ -146,13 +146,29 @@ module.exports.validateForgotPassword = (req, res, next) => {
 
 // [POST] /auth/verify-otp
 module.exports.validateVerifyOTP = (req, res, next) => {
-    const { otp } = req.body;
+    const { otp, Email } = req.body;
+    const errors = [];
 
+    // Validate OTP
     if (!otp || otp.trim() === '') {
+        errors.push({ field: 'otp', message: 'Mã OTP không được để trống' });
+    }
+
+    // Validate Email 
+    if (!Email || Email.trim() === '') {
+        errors.push({ field: 'Email', message: 'Email không được để trống' });
+    } else {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(Email)) {
+            errors.push({ field: 'Email', message: 'Email không hợp lệ' });
+        }
+    }
+
+    if (errors.length > 0) {
         return res.status(400).json({
             success: false,
             message: 'Dữ liệu không hợp lệ',
-            errors: [{ field: 'otp', message: 'Mã OTP không được để trống' }]
+            errors: errors
         });
     }
     next();
@@ -160,25 +176,35 @@ module.exports.validateVerifyOTP = (req, res, next) => {
 
 // [POST] /auth/reset-password
 module.exports.validateResetPassword = (req, res, next) => {
-    const { otp, newPassword, confirmPassword } = req.body;
+    const { otp, newPassword, confirmPassword, Email } = req.body;
     const errors = [];
 
+    // Validate OTP
     if (!otp || otp.trim() === '') {
         errors.push({ field: 'otp', message: 'Mã OTP không được để trống' });
     }
 
-    // Check 'newPassword'
+    // Validate Email
+    if (!Email || Email.trim() === '') {
+        errors.push({ field: 'Email', message: 'Email không được để trống' });
+    } else {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(Email)) {
+            errors.push({ field: 'Email', message: 'Email không hợp lệ' });
+        }
+    }
+
+    // Validate Password
     if (!newPassword || newPassword === '') {
         errors.push({ field: 'newPassword', message: 'Mật khẩu mới không được để trống' });
     } else if (newPassword.length < 6) {
         errors.push({ field: 'newPassword', message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
     }
 
-    // Thêm check confirmPassword
+    // Validate Confirm Password
     if (newPassword !== confirmPassword) {
         errors.push({ field: 'confirmPassword', message: 'Xác nhận mật khẩu không khớp' });
     }
-
 
     if (errors.length > 0) {
         return res.status(400).json({
